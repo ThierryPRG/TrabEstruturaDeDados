@@ -1,0 +1,192 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct Produto {
+    int codigo;
+    char nome[100];
+    float preco;
+    struct Produto *esquerda;
+    struct Produto *direita;
+} Produto;
+
+Produto* criarProduto(int codigo, char nome[], float preco) {
+    Produto* novo = (Produto*)malloc(sizeof(Produto));
+    novo->codigo = codigo;
+    strcpy(novo->nome, nome);
+    novo->preco = preco;
+    novo->esquerda = novo->direita = NULL;
+    return novo;
+}
+
+Produto* inserir(Produto* raiz, int codigo, char nome[], float preco) {
+    if (raiz == NULL)
+        return criarProduto(codigo, nome, preco);
+
+    if (codigo < raiz->codigo)
+        raiz->esquerda = inserir(raiz->esquerda, codigo, nome, preco);
+    else if (codigo > raiz->codigo)
+        raiz->direita = inserir(raiz->direita, codigo, nome, preco);
+    else
+        printf("Código já existente!\n");
+
+    return raiz;
+}
+
+Produto* buscar(Produto* raiz, int codigo) {
+    if (raiz == NULL || raiz->codigo == codigo)
+        return raiz;
+
+    if (codigo < raiz->codigo)
+        return buscar(raiz->esquerda, codigo);
+    else
+        return buscar(raiz->direita, codigo);
+}
+
+void emOrdem(Produto* raiz) {
+    if (raiz != NULL) {
+        emOrdem(raiz->esquerda);
+        printf("Código: %d | Nome: %s | Preço: R$ %.2f\n", raiz->codigo, raiz->nome, raiz->preco);
+        emOrdem(raiz->direita);
+    }
+}
+
+Produto* encontrarMinimo(Produto* raiz) {
+    while (raiz->esquerda != NULL)
+        raiz = raiz->esquerda;
+    return raiz;
+}
+
+Produto* remover(Produto* raiz, int codigo) {
+    if (raiz == NULL)
+        return NULL;
+
+    if (codigo < raiz->codigo) {
+        raiz->esquerda = remover(raiz->esquerda, codigo);
+    } else if (codigo > raiz->codigo) {
+        raiz->direita = remover(raiz->direita, codigo);
+    } else {
+        if (raiz->esquerda == NULL) {
+            Produto* temp = raiz->direita;
+            free(raiz);
+            return temp;
+        } else if (raiz->direita == NULL) {
+            Produto* temp = raiz->esquerda;
+            free(raiz);
+            return temp;
+        }
+        Produto* temp = encontrarMinimo(raiz->direita);
+        raiz->codigo = temp->codigo;
+        strcpy(raiz->nome, temp->nome);
+        raiz->preco = temp->preco;
+        raiz->direita = remover(raiz->direita, temp->codigo);
+    }
+
+    return raiz;
+}
+
+void salvarEmArquivo(Produto* raiz, FILE* arquivo) {
+    if (raiz != NULL) {
+        salvarEmArquivo(raiz->esquerda, arquivo);
+        fprintf(arquivo, "%d|%s|%.2f\n", raiz->codigo, raiz->nome, raiz->preco);
+        salvarEmArquivo(raiz->direita, arquivo);
+    }
+}
+
+Produto* carregarDoArquivo(Produto* raiz) {
+    FILE* arquivo = fopen("produtos.txt", "r");
+    if (arquivo == NULL) {
+        printf("Arquivo não encontrado. Criando novo...\n");
+        return NULL;
+    }
+
+    int codigo;
+    char nome[100];
+    float preco;
+    char linha[150];
+
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        if (sscanf(linha, "%d|%99[^|]|%f", &codigo, nome, &preco) == 3) {
+            raiz = inserir(raiz, codigo, nome, preco);
+        }
+    }
+
+    fclose(arquivo);
+    return raiz;
+}
+
+void salvarArquivoFinal(Produto* raiz) {
+    FILE* arquivo = fopen("produtos.txt", "w");
+    if (arquivo == NULL) {
+        printf("Erro ao salvar o arquivo!\n");
+        return;
+    }
+
+    salvarEmArquivo(raiz, arquivo);
+    fclose(arquivo);
+}
+
+int main() {
+    Produto* raiz = NULL;
+    int opcao, codigo;
+    char nome[100];
+    float preco;
+
+    raiz = carregarDoArquivo(raiz);
+
+    do {
+        printf("\n=== MENU ===\n");
+        printf("1. Inserir produto\n");
+        printf("2. Buscar produto\n");
+        printf("3. Remover produto\n");
+        printf("4. Listar produtos em ordem\n");
+        printf("0. Sair\n");
+        printf("Escolha: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1:
+                printf("Código: ");
+                scanf("%d", &codigo);
+                printf("Nome: ");
+                scanf(" %[^\n]", nome);
+                printf("Preço: ");
+                scanf("%f", &preco);
+                raiz = inserir(raiz, codigo, nome, preco);
+                break;
+
+            case 2:
+                printf("Código a buscar: ");
+                scanf("%d", &codigo);
+                Produto* p = buscar(raiz, codigo);
+                if (p)
+                    printf("Produto encontrado: %s | R$ %.2f\n", p->nome, p->preco);
+                else
+                    printf("Produto não encontrado.\n");
+                break;
+
+            case 3:
+                printf("Código a remover: ");
+                scanf("%d", &codigo);
+                raiz = remover(raiz, codigo);
+                printf("Produto removido (se existia).\n");
+                break;
+
+            case 4:
+                printf("\nProdutos em ordem:\n");
+                emOrdem(raiz);
+                break;
+
+            case 0:
+                salvarArquivoFinal(raiz);
+                printf("Saindo... Dados salvos em 'produtos.txt'.\n");
+                break;
+
+            default:
+                printf("Opção inválida.\n");
+        }
+
+    } while (opcao != 0);
+
+    return 0;
+}
